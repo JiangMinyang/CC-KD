@@ -1,37 +1,17 @@
-import torchvision.transforms as torch_transforms
 from torch.utils.data import DataLoader
-import misc.transforms as transforms
-from datasets.cc_dataloader import CCLoader
+from datasets.SHHA.SHHA import SHHA
+from torch.utils.data.dataloader import default_collate
+from misc.utils import train_collate
 import os.path as osp
 import torch
-from datasets.SHHA.dataset_config import config
 
-def loading_data(batch_size):
-    data_path = config.data_path
+def loading_data(args):
+    train_set = SHHA(osp.join(args.data_dir, 'train'), args.crop_size, downsample_ratio=8, method='train')
+    val_set = SHHA(osp.join(args.data_dir, 'val'), args.crop_size, downsample_ratio=8, method='val')
+    test_set = SHHA(osp.join(args.data_dir, 'test'), args.crop_size, downsample_ratio=8, method='test')
 
-    main_transform = transforms.Compose([
-        transforms.HSV(),
-        transforms.RandomCrop(),
-        transforms.Scale(height=config.height, width=config.width),
-        transforms.RandomAffine(degrees=config.aug_degrees, translate=config.aug_translate, scale=config.aug_scale),
-        transforms.RandomHorizontallyFlip()
-    ])
+    train_loader = DataLoader(train_set, collate_fn=train_collate, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+    val_loader = DataLoader(val, collate_fn=default_collate, batch_size=1, shuffle=False, num_workers=args.num_workers, pin_memory=False)
+    test_loader = DataLoader(val, collate_fn=default_collate, batch_size=1, shuffle=False, num_workers=args.num_workers, pin_memory=False)
 
-    val_main_transform = transforms.Compose([
-        transforms.Scale(height=config.height, width=config.width)
-    ])
-
-    img_transform = torch_transforms.Compose([
-        torch_transforms.ToTensor(),
-    ])
-
-    train_set = CCLoader(osp.join(data_path, 'train'), 'train', main_transform=main_transform, img_transform=img_transform, downscale=4, default_dis=config.padm_default_distance)
-    train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=config.dataloader_worker, shuffle=True, drop_last=False)
-
-    val_set = CCLoader(osp.join(data_path, 'val'), 'val', main_transform=val_main_transform, img_transform=img_transform, downscale=4, default_dis=config.padm_default_distance)
-    val_loader = DataLoader(val_set, batch_size=batch_size, num_workers=config.dataloader_worker, shuffle=False, drop_last=False)
-
-    test_set = CCLoader(osp.join(data_path, 'test'), 'test', main_transform=val_main_transform, img_transform=img_transform, downscale=4, default_dis=config.padm_default_distance)
-    test_loader = DataLoader(test_set, batch_size=batch_size, num_workers=config.dataloader_worker, shuffle=False, drop_last=False)
-
-    return train_loader, val_loader, test_loader
+    return {'train': train_loader, 'val': val_loader, 'test': test_loader}

@@ -13,12 +13,25 @@ import torchvision.utils as vutils
 import torchvision.transforms as standard_transforms
 import pdb
 import cv2
+import logging
 
+def train_collate(batch):
+    transposed_batch = list(zip(*batch))
+    images = torch.stack(transposed_batch[0], 0)
+    points = transposed_batch[1]  # the number of points is not fixed, keep it as a list of tensor
+    st_sizes = torch.FloatTensor(transposed_batch[2])
+    gt_discretes = torch.stack(transposed_batch[3], 0)
+    return images, points, st_sizes, gt_discretes
 
 def initialize_weights(models):
     for model in models:
         real_init_weights(model)
 
+def adjust_loss_weight(initial_weight, epoch, lam=0.9, is_target_loss=True):
+    if is_target_loss:
+        return 0 if epoch <= 30 else initial_weight * (lam ** (epoch // 30))
+    else:
+        return initial_weight * (lam ** (epoch // 50))
 
 def real_init_weights(m):
     if isinstance(m, list):
@@ -51,11 +64,17 @@ class AverageMeter(object):
         self.sum = 0
         self.count = 0
 
-    def update(self, cur_val):
+    def update(self, cur_val, n=1):
         self.cur_val = cur_val
-        self.sum += cur_val
-        self.count += 1
-        self.avg = self.sum / self.count
+        self.sum += cur_val * n
+        self.count += n
+        self.avg = 1.0 * self.sum / self.count
+
+    def get_avg(self):
+        return self.avg
+
+    def get_count(self):
+        return self.count
 
 class Timer(object):
     """A simple timer."""
@@ -85,3 +104,40 @@ def save_density_map(density_map,output_dir, fname='results.png'):
     density_map = 255*density_map / np.max(density_map)
     cv2.imwrite(os.path.join(output_dir,fname),density_map)
     
+def get_logger(log_file):
+    logger = logging.getLogger(log_file)
+    logger.setLevel(logging.DEBUG)
+    fh = logging.FileHandler(log_file)
+    fh.setLevel(logging.DEBUG)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    ch.setFormatter(formatter)
+    fh.setFormatter(formatter)
+    logger.addHandler(ch)
+    logger.addHandler(fh)
+    return logger
+
+
+def print_config(config, logger):
+    """
+    Print configuration of the model
+    """
+    for k, v in config.items():
+        logger.info("{}:\t{}".format(k.ljust(15), v))
+
+class Save_Handle(object):
+    """handle the number of """
+    def __init__(self, max_num):
+        self.save_list = []
+        self.max_num = max_num
+
+    def append(self, save_path):
+        if len(self.save_list) < self.max_num:
+            self.save_list.append(save_path)
+        else:
+            remove_path = self.save_list[0]
+            del self.save_list[0]
+            self.save_list.append(save_path)
+            if os.path.exists(remove_path):
+                os.remove(remove_path)
