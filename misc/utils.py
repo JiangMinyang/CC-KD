@@ -29,7 +29,7 @@ def initialize_weights(models):
 
 def adjust_loss_weight(initial_weight, epoch, lam=0.9, is_target_loss=True):
     if is_target_loss:
-        return 0 if epoch <= 30 else initial_weight * (lam ** (epoch // 30))
+        return 0.01 if epoch <= 30 else initial_weight * (lam ** (epoch // 30))
     else:
         return initial_weight * (lam ** (epoch // 50))
 
